@@ -117,7 +117,7 @@ Claude Code gets its own copies of the skills. The subagent and MCP registration
 
 ## Getting started
 
-You need Bash, Git, Python 3, Node.js 20.9 or newer, and npm. To invoke the subagent, use Pi with Gentle Shell and access to the configured model.
+You need Linux or macOS, Bash, Git, Python 3, Node.js 20.9 or newer, and npm. The installer checks this before it changes anything and stops if one is missing. On macOS the system Bash is 3.2; install Bash 4 or newer (`brew install bash`) and run the scripts with it. To invoke the subagent, use Pi with Gentle Shell and access to a model.
 
 ```bash
 git clone https://github.com/RamonsDka/agent-youtube ~/p/agent-youtube && cd ~/p/agent-youtube && bash install.sh
@@ -130,14 +130,38 @@ Fill in `~/.claude/youtube/voice.md` with your audience, voice, and claims polic
 
 | Default location | Change |
 | --- | --- |
-| `~/p/agent-youtube/vendor/` | Checks out the two pinned upstream repos at detached commits and runs `npm install` in `vendor/tubemaster/`. `vendor/` is gitignored. |
-| `~/.agents/skills/` and `~/.claude/skills/` | Copies all 11 `yt-*` skills to both locations. Reinstall replaces the matching skill directories, so save local edits before installing. |
+| `~/p/agent-youtube/vendor/` | Checks out the two pinned upstream repos at detached commits and runs `npm ci` (or `npm install` without a lockfile) in `vendor/tubemaster/`. `vendor/` is gitignored. |
+| `~/.agents/skills/` and `~/.claude/skills/` | Copies all 11 `yt-*` skills to both locations. A skill you edited is not overwritten unless you pass `--force`, which first moves it to `<skill>.bak.<timestamp>`. |
 | `~/.claude/youtube/voice.md` | Copies the template only if the path does not already exist. |
-| `~/.gentle-shell/agent/agents/agent-youtube.md` | Installs the subagent definition, replacing any file at that path. |
-| `~/.gentle-shell/agent/mcp.json` | Adds the `tubemaster` stdio entry, which runs `npm run mcp:video-metadata` from the TubeMaster checkout. |
-| `~/.gentle-shell/agent/subagents.json` | Adds `cpamc/deeprelay/deepseek-v4.1-flash` with `high` effort for `agent-youtube`. |
+| `~/.gentle-shell/agent/agents/agent-youtube.md` | Renders the subagent definition with your resolved voice path and Pi skills directory. A modified file is kept unless you pass `--force`. |
+| `~/.gentle-shell/agent/mcp.json` | Adds the `tubemaster` stdio entry, which runs `npm run mcp:video-metadata` from the TubeMaster checkout. The `npm` command is registered by absolute path, so GUI sessions without your shell's `PATH` still find it. |
+| `~/.gentle-shell/agent/subagents.json` | Adds the `agent-youtube` profile: the model from `AGENT_YOUTUBE_MODEL` (omitted by default, so your configured default applies) and the effort (`high` by default). |
+| `~/.gentle-shell/agent/agent-youtube.manifest.json` | Records exactly what was installed, so upgrades and uninstalls know what is still unmodified. |
 
-Before rewriting an existing JSON config, the script saves a timestamped `<name>.json.bak.<UTC timestamp>` beside it. Unrelated JSON entries are preserved. Matching entries are left alone on reinstall; conflicting entries under the same names cause the installer to stop rather than overwrite them. Run `bash install.sh --help` for destination overrides.
+### Options and environment
+
+`bash install.sh --help` lists everything below. `--force` overwrites entries, skills, and the agent file you modified; each is backed up first.
+
+| Variable | Effect |
+| --- | --- |
+| `AGENT_YOUTUBE_MODEL` | Model for the agent. Unset: the key is omitted and your default applies. |
+| `AGENT_YOUTUBE_EFFORT` | `low`, `medium`, `high` (default), or `max`. Written as `thinking` in the agent frontmatter and `effort` in `subagents.json`; both always carry the same value. |
+| `AGENT_YOUTUBE_OPERATOR` | `1` adds the mutating TubeMaster tools (see below). |
+| `VENDOR_DIR`, `PI_SKILLS_DIR`, `CLAUDE_SKILLS_DIR`, `CLAUDE_YOUTUBE_DIR`, `GENTLE_AGENT_DIR` | Override destinations. A relative `VENDOR_DIR` is resolved against the current directory. |
+| `YT_SKILL_REPO`, `TUBEMASTER_REPO` | Alternate Git sources for the pinned repos. |
+| `SKIP_NPM=1` | Skip the npm step. |
+
+The voice path and skills directory in the agent prompt come from the resolved `CLAUDE_YOUTUBE_DIR` and `PI_SKILLS_DIR`. If `watch-video` or `yt-dlp` is missing the installer warns on stderr, and the agent says so and works from what you provide.
+
+### Read-only and operator installs
+
+The default install gives the agent only read-only TubeMaster tools, so drafting workflows cannot upload, publish, or delete. To allow channel changes, reinstall with `AGENT_YOUTUBE_OPERATOR=1 bash install.sh`. The agent still asks for your explicit confirmation before any change.
+
+### Upgrades and local edits
+
+Reinstall upgrades entries that still match the manifest, leaves unchanged ones alone, and stops with guidance if you modified an entry, a skill, or the agent file. The check happens before the vendor checkout moves to a new pin, so an upstream bump alone never counts as your edit. Rerun with `--force` to overwrite; the originals are kept as `<name>.bak.<timestamp>` (config files get `<name>.json.bak.<UTC timestamp>` beside the configured path, and the file's mode is preserved).
+
+Config files must be plain JSON. Comments and trailing commas are not supported; the installer stops with a clear error and changes nothing.
 
 </details>
 
@@ -192,7 +216,7 @@ TUBEMASTER_REPO=/path/to/tubemaster \
 bash tests/test_install.sh
 ```
 
-The test creates a temporary `HOME` and vendor directory and skips `npm install`. It verifies pinned checkouts, both sets of skills, the agent and config backups, reinstall behavior, and repeatable uninstall.
+The test creates temporary home and vendor directories and skips npm. It verifies `--help` and usage errors, pre-flight failures (using stub tools on `PATH`), pinned checkouts, both sets of skills against the list in `config/paths.sh`, a fresh install without existing configs, idempotent reinstall, modified-skill refusal and `--force` backups, uninstall preservation and warnings, a missing vendor checkout, and a relative `VENDOR_DIR`. The Python side runs with `python3 -m unittest discover -s tests -p 'test_*.py'`.
 
 <details>
 <summary>Installer test screenshot: three passing checks</summary>
@@ -212,7 +236,7 @@ cd ~/p/agent-youtube
 bash uninstall.sh
 ```
 
-Uninstall removes matching JSON entries and backs up the configs it changes. It removes the installed skills and agent definition only if they still match the source copies. It keeps the voice profile, Git checkouts, backups, unrelated entries, and modified copies. Use the same path overrides as the install, if any.
+Uninstall removes the JSON entries recorded in the manifest and backs up the configs it changes. It removes a skill only if it is a real directory identical to the vendor copy, and the agent file only if it still matches what was installed. Modified or symlinked skills, a modified agent file, and skills whose vendor checkout is missing are kept. Each item is reported on stdout as `removed`, `unchanged`, or `skipped (modified)`, and every skipped path is listed on stderr with its reason. When anything was kept, the final message says "some items were kept" (the exit code is still 0). Uninstall also keeps the voice profile, Git checkouts, backups, and unrelated entries. Use the same path overrides as the install, if any.
 
 ## Credits
 
