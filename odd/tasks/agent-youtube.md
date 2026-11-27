@@ -20,7 +20,7 @@ Repo: ~/p/agent-youtube (public GitHub repo RamonsDka/agent-youtube). Global ins
 - T2 [S1,S2,S3] run install.sh, verify global install — parent — commit: n/a
 - T3 [S6] README, methodology, screenshots — writer — commit: a2672f0
 - T4 [S6] gh repo create public + push — parent — done
-- T5 [S8] README cover, index, badges, hero image, logo — writer — commit:
+- T5 [S8] README cover, index, badges, hero image, logo — writer — commit: 473be63
 
 ## Log
 
