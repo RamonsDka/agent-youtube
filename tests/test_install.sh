@@ -9,7 +9,8 @@ yt_pin=a2feb2104981a375ffd4f87ee04f4f5344ac43c6
 tube_pin=a8497dcd50630c701c5dae5e5e17dfcc9e6819e9
 bash_bin=$(command -v bash)
 
-scratch=$(mktemp -d)
+# Canonical path: the product writes resolved paths (macOS /var -> /private/var).
+scratch=$(cd -- "$(mktemp -d)" && pwd -P)
 trap 'python3 -c "import shutil, sys; shutil.rmtree(sys.argv[1])" "$scratch"' EXIT
 export VENDOR_DIR="$scratch/vendor with spaces"
 export SKIP_NPM=1 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_ALLOW_PROTOCOL=file
