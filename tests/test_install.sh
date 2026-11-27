@@ -347,6 +347,7 @@ mk_toolbin() {
     for tool in $real_tools; do
         [[ -e "$dir/$tool" ]] || ln -s "$(command -v "$tool")" "$dir/$tool"
     done
+    # shellcheck disable=SC2016 # the fake node script must expand the variable when it runs
     printf '%s\n' '#!/bin/sh' 'echo "${FAKE_NODE_VERSION:-v22.0.0}"' > "$dir/node"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "$dir/npm"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "$dir/yt-dlp"

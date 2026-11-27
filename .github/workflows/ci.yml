@@ -24,7 +24,7 @@ jobs:
         run: bash -n install.sh uninstall.sh config/paths.sh tests/test_install.sh
 
       - name: shellcheck
-        run: shellcheck install.sh uninstall.sh config/paths.sh tests/test_install.sh
+        run: shellcheck -x install.sh uninstall.sh config/paths.sh tests/test_install.sh
 
       - name: Python tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'

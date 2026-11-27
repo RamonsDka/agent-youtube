@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared destinations and skill names for install and uninstall.
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 vendor=${VENDOR_DIR:-"$repo/vendor"}
@@ -5,10 +6,14 @@ vendor=${VENDOR_DIR:-"$repo/vendor"}
 if [[ -d $vendor ]]; then
     vendor=$(cd -- "$vendor" && pwd -P)
 fi
+# shellcheck disable=SC2034 # used by the scripts that source this file
 pi_skills=${PI_SKILLS_DIR:-"$HOME/.agents/skills"}
+# shellcheck disable=SC2034 # used by the scripts that source this file
 claude_skills=${CLAUDE_SKILLS_DIR:-"$HOME/.claude/skills"}
+# shellcheck disable=SC2034 # used by the scripts that source this file
 voice_dir=${CLAUDE_YOUTUBE_DIR:-"$HOME/.claude/youtube"}
 agent_dir=${GENTLE_AGENT_DIR:-"$HOME/.gentle-shell/agent"}
+# shellcheck disable=SC2034 # used by the scripts that source this file
 skills=(yt-audit yt-chapters yt-comment yt-edit yt-package yt-plan yt-retention
         yt-script yt-seo yt-shorts yt-viral)
 

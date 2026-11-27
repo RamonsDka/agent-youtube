@@ -10,6 +10,7 @@ usage() {
 
 show_help() {
     usage
+    # shellcheck disable=SC2016 # backticks in the help text are literal
     printf '%s\n' \
         'Install the pinned YouTube skills, the agent, and the TubeMaster MCP registration.' \
         '' \
