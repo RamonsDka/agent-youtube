@@ -15,7 +15,7 @@ Repo: ~/p/agent-youtube (public GitHub repo RamonsDka/agent-youtube). Global ins
 
 ## Tasks
 
-- T1 [S1,S2,S3,S4,S5,S7] repo scaffold: install.sh (idempotent, backups), agents/agent-youtube.md, tests — writer — commit:
+- T1 [S1,S2,S3,S4,S5,S7] repo scaffold: install.sh (idempotent, backups), agents/agent-youtube.md, tests — writer — commit: 29ccc15
 - T2 [S1,S2,S3] run install.sh, verify global install — parent — commit: n/a
 - T3 [S6] README, methodology, screenshots — writer — commit:
 - T4 [S6] gh repo create public + push — parent
