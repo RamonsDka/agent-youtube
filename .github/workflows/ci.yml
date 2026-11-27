@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash shellcheck
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Syntax check
+        run: bash -n install.sh uninstall.sh config/paths.sh tests/test_install.sh
+
+      - name: shellcheck
+        run: shellcheck -x install.sh uninstall.sh config/paths.sh tests/test_install.sh
+
+      - name: Python tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Synthetic local git test
+        run: |
+          fixtures=$(mktemp -d)
+          git clone https://github.com/jakeschincariol/youtube-agent-skill.git "$fixtures/youtube-agent-skill"
+          git clone https://github.com/Gentleman-Programming/tubemaster.git "$fixtures/tubemaster"
+          YT_SKILL_REPO="$fixtures/youtube-agent-skill" \
+          TUBEMASTER_REPO="$fixtures/tubemaster" \
+          bash tests/test_install.sh

@@ -86,5 +86,5 @@ flatpak run --filesystem="$PWD/docs/assets" com.google.Chrome \
 The README cover is an illustration of the recorded drafting demo. To render it at 1600 × 800 from [`assets/src/cover.htm`](assets/src/cover.htm), run from the checkout:
 
 ```bash
-flatpak run --filesystem="$PWD/docs/assets" com.google.Chrome --headless --disable-gpu --user-data-dir=/tmp/ay-chrome-cover --screenshot="$PWD/docs/assets/cover.png" --window-size=1600,800 "file://$PWD/docs/assets/src/cover.htm"
+flatpak run --filesystem="$PWD/docs/assets" com.google.Chrome --headless --disable-gpu --user-data-dir="$(mktemp -d)" --screenshot="$PWD/docs/assets/cover.png" --window-size=1600,800 "file://$PWD/docs/assets/src/cover.htm"
 ```
