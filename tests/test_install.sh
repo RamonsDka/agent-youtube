@@ -261,13 +261,67 @@ printf '%s\n' 'ok - model, effort, and operator env reach the installed agent an
 use_home missing
 run "$bash_bin" "$repo/install.sh"
 rc_is 0 'install for missing-vendor case'
+# A reinstall with the vendor checkout elsewhere does not call every skill modified.
+run env VENDOR_DIR="$scratch/relocated vendor" "$bash_bin" "$repo/install.sh"
+rc_is 0 'reinstall with relocated vendor'
+err_lacks 'differ from the previous install'
+cp -R "$VENDOR_DIR" "$scratch/vendor-copy"
+printf '%s\n' 'local edit' >> "$claude_root/yt-seo/SKILL.md"
 run env VENDOR_DIR="$scratch/no such vendor" "$bash_bin" "$repo/uninstall.sh"
 rc_is 0 'uninstall with missing vendor'
-err_has 'vendor'
-err_has "$pi_root/yt-audit"
+err_has "$claude_root/yt-seo"
+err_lacks "$pi_root/yt-audit"
 out_has 'some items were kept'
-[[ -d "$pi_root/yt-audit" && -d "$claude_root/yt-audit" ]]
-printf '%s\n' 'ok - missing vendor checkout warns and keeps skills'
+[[ -d "$claude_root/yt-seo" ]]
+for name in "${expected[@]}"; do
+    [[ $name == yt-seo ]] && continue
+    [[ ! -e "$pi_root/$name" && ! -e "$claude_root/$name" ]] || fail "missing-vendor uninstall kept $name"
+done
+[[ ! -e "$agent/agents" ]] || fail 'uninstall left an empty agents directory'
+printf '%s\n' 'ok - missing or relocated vendor: unmodified skills handled, modified ones kept with a warning'
+
+# ------------------------------------------- rejected install does not mutate
+use_home reject
+mkdir -p "$agent"
+ln -s "$scratch/nowhere/mcp.json" "$agent/mcp.json"
+run env VENDOR_DIR="$scratch/reject-vendor" "$bash_bin" "$repo/install.sh"
+rc_is 1 'dangling symlink config'
+err_has 'dangling symlink'
+[[ ! -e "$HOME/.agents" && ! -e "$HOME/.claude" && ! -e "$scratch/reject-vendor" && ! -e "$scratch/nowhere" ]] ||
+    fail 'rejected install (dangling symlink) mutated state'
+rm -f -- "$agent/mcp.json"
+printf '%s\n' '{ // comment' '}' > "$agent/mcp.json"
+run env VENDOR_DIR="$scratch/reject-vendor" "$bash_bin" "$repo/install.sh"
+rc_is 1 'JSONC config'
+err_has 'comments and trailing commas'
+[[ ! -e "$HOME/.agents" && ! -e "$HOME/.claude" && ! -e "$scratch/reject-vendor" ]] ||
+    fail 'rejected install (JSONC) mutated state'
+printf '%s\n' 'ok - rejected installs create no skill, voice, or vendor directories'
+
+# --------------------------------- symlinked agent file survives uninstall
+use_home linked
+run "$bash_bin" "$repo/install.sh"
+rc_is 0 'install for symlink case'
+printf '%s\n' 'dotfiles agent' > "$scratch/dotfiles-agent.md"
+rm -f -- "$agent/agents/agent-youtube.md"
+ln -s "$scratch/dotfiles-agent.md" "$agent/agents/agent-youtube.md"
+run "$bash_bin" "$repo/uninstall.sh"
+rc_is 0 'uninstall with symlinked agent'
+out_has 'skipped (symlink)'
+[[ -L "$agent/agents/agent-youtube.md" && $(< "$scratch/dotfiles-agent.md") == 'dotfiles agent' ]] ||
+    fail 'symlinked agent file or its target was removed'
+printf '%s\n' 'ok - uninstall keeps a symlinked agent file and its target'
+
+# ------------------------------- checkout whose .git is a file is reused
+use_home gitfile
+mkdir -p "$scratch/gf-vendor"
+git clone -q --separate-git-dir "$scratch/gf-gitdir" "$YT_SKILL_REPO" "$scratch/gf-vendor/youtube-agent-skill"
+[[ -f "$scratch/gf-vendor/youtube-agent-skill/.git" ]]
+run env VENDOR_DIR="$scratch/gf-vendor" "$bash_bin" "$repo/install.sh"
+rc_is 0 'gitfile checkout'
+[[ -f "$scratch/gf-vendor/youtube-agent-skill/.git" ]] || fail 'gitfile checkout was re-cloned'
+[[ $(git -C "$scratch/gf-vendor/youtube-agent-skill" rev-parse HEAD) == "$yt_pin" ]]
+printf '%s\n' 'ok - a checkout with a .git file is reused'
 
 # ------------------------------------------------- relative VENDOR_DIR paths
 use_home relative

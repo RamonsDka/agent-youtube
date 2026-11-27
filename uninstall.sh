@@ -15,14 +15,23 @@ for arg in "$@"; do
             printf '%s\n' \
                 'Remove the installed YouTube skills, agent, and TubeMaster MCP registration.' \
                 'Only items that still match what the installer wrote are removed. Modified or' \
-                'symlinked skills, a modified agent file, and skills whose vendor copy is missing' \
-                'are kept and listed on stderr. The voice profile, Git checkouts, and configuration' \
-                'backups are always kept.'
+                'symlinked skills or agent file, and a modified agent file are kept and listed on' \
+                'stderr. A skill counts as modified when it differs from the hash recorded at install' \
+                '(or from the vendor copy when none was recorded). The voice profile, Git checkouts,' \
+                'and configuration backups are always kept.'
             show_paths
             exit 0
             ;;
         *) usage >&2; exit 2 ;;
     esac
+done
+
+# Judge the skills first: update.py removes the manifest that holds their recorded hashes.
+states=()
+for skill_root in "$pi_skills" "$claude_skills"; do
+    for skill in "${skills[@]}"; do
+        states+=("$(skill_state "$skill_root/$skill" "$vendor/youtube-agent-skill/skills/$skill")")
+    done
 done
 
 kept=0
@@ -34,10 +43,12 @@ if [[ $update_out == *skipped* ]]; then
     kept=1
 fi
 
+i=0
 for skill_root in "$pi_skills" "$claude_skills"; do
     for skill in "${skills[@]}"; do
         target="$skill_root/$skill"
-        state=$(skill_state "$target" "$vendor/youtube-agent-skill/skills/$skill")
+        state=${states[i]}
+        i=$((i + 1))
         case $state in
             absent) ;;
             unmodified)

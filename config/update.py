@@ -43,6 +43,35 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def tree_hash(path):
+    """Hash a directory's relative names, file contents and symlink targets."""
+    digest = hashlib.sha256()
+    for item in sorted(path.rglob('*')):
+        digest.update(item.relative_to(path).as_posix().encode('utf-8', 'surrogateescape') + b'\0')
+        if item.is_symlink():
+            digest.update(b'L' + os.readlink(item).encode('utf-8', 'surrogateescape'))
+        elif item.is_file():
+            digest.update(b'F' + item.read_bytes())
+        else:
+            digest.update(b'D')
+    return digest.hexdigest()
+
+
+def skill_state(args, manifest):
+    """absent | symlink | vendor-missing | unmodified | modified, judged by the recorded hash first."""
+    path = args.path
+    if path.is_symlink():
+        return 'symlink'
+    if not path.exists():
+        return 'absent'
+    recorded = manifest.get('skills', {}).get(args.skill_name)
+    if recorded is not None:
+        return 'unmodified' if tree_hash(path) == recorded else 'modified'
+    if args.vendor_copy is None or not args.vendor_copy.is_dir():
+        return 'vendor-missing'
+    return 'unmodified' if tree_hash(path) == tree_hash(args.vendor_copy) else 'modified'
+
+
 def check_path(path):
     if path.is_symlink() and not path.exists():
         raise Fail(f'{path}: dangling symlink; refusing to create its target')
@@ -146,7 +175,7 @@ def parse_args(argv):
             'are not supported.'
         ),
     )
-    parser.add_argument('action', choices=('install', 'uninstall'))
+    parser.add_argument('action', choices=('install', 'uninstall', 'skill-state'))
     parser.add_argument('--agent-dir', required=True, type=Path, help='Gentle Shell agent directory')
     parser.add_argument('--tubemaster', type=Path, help='TubeMaster checkout (install)')
     parser.add_argument('--template', type=Path, help='agent template, agents/agent-youtube.md (install)')
@@ -154,7 +183,24 @@ def parse_args(argv):
     parser.add_argument('--skills-dir', help='skills directory written into the agent prompt (install)')
     parser.add_argument('--force', action='store_true',
                         help='overwrite entries/files you modified (a backup is kept beside them)')
+    parser.add_argument('--check', action='store_true',
+                        help='install: validate everything and report conflicts, but write nothing')
+    parser.add_argument('--skill', action='append', default=[],
+                        help='install: record the hash of this installed skill in --skills-dir (repeatable)')
+    parser.add_argument('--path', type=Path, help='skill-state: the installed skill directory')
+    parser.add_argument('--vendor-copy', type=Path,
+                        help='skill-state: vendor copy, used only when no hash was recorded')
     args = parser.parse_args(argv)
+    only = {'install': ('tubemaster', 'template', 'voice', 'skills_dir', 'force', 'check', 'skill'),
+            'skill-state': ('path', 'vendor_copy', 'skill')}
+    allowed = {'install': only['install'], 'uninstall': (), 'skill-state': only['skill-state']}[args.action]
+    for name in sorted({n for names in only.values() for n in names} - set(allowed)):
+        if getattr(args, name) not in (None, False, []):
+            parser.error(f"--{name.replace('_', '-')} is not valid for {args.action}")
+    if args.action == 'skill-state':
+        if args.path is None or len(args.skill) != 1:
+            parser.error('skill-state requires --path and exactly one --skill')
+        args.skill_name = args.skill[0]
     if args.action == 'install':
         missing = [f'--{n}' for n in ('tubemaster', 'template', 'voice', 'skills-dir')
                    if getattr(args, n.replace('-', '_')) is None]
@@ -178,8 +224,12 @@ def run(args):
     manifest_path = agent_dir / MANIFEST
     manifest_raw = read_optional(manifest_path)
     manifest = load_json(manifest_path, manifest_raw)
-    if manifest_raw is not None and not (isinstance(manifest, dict) and isinstance(manifest.get('entries', {}), dict)):
+    if manifest_raw is not None and not (isinstance(manifest, dict) and isinstance(manifest.get('entries', {}), dict)
+                                         and isinstance(manifest.get('skills', {}), dict)):
         raise Fail(f'{manifest_path}: unexpected manifest layout')
+    if args.action == 'skill-state':
+        print(skill_state(args, manifest))
+        return
     recorded = manifest.get('entries', {})
     recorded_agent = manifest.get('agent_file_sha256')
     legacy = manifest_raw is None
@@ -237,14 +287,20 @@ def run(args):
     for item in json_items:
         status = decide(args.action, item['current'], new.get(item['file']), item['managed'], args.force)
         results.append((status, item['label'], item))
-    agent_status = decide(args.action, agent_sha, agent_new_sha if install else None, agent_managed, args.force)
+    agent_link = agent_path.is_symlink()
+    if agent_link:
+        # Never write through or delete a symlinked agent file; --force replaces the link itself.
+        agent_status = ('updated' if args.force else 'conflict') if install else 'skipped (symlink)'
+    else:
+        agent_status = decide(args.action, agent_sha, agent_new_sha if install else None, agent_managed, args.force)
     agent_label = str(agent_path)
 
     for status, label, item in results + [(agent_status, agent_label, None)]:
         if status == 'conflict':
-            what = f"{item['section']}.{item['key']}" if item else 'agent file'
-            raise Fail(f'{label}: {what} was modified by the user; '
-                       f'keep it, or rerun with --force to overwrite (a backup is kept)')
+            reason = 'is a symlink' if item is None and agent_link else 'was modified by the user'
+            raise Fail(f'{label}: {reason}; keep it, or rerun with --force to overwrite (a backup is kept)')
+    if args.check:
+        return
 
     # Apply.
     for status, label, item in results:
@@ -261,10 +317,16 @@ def run(args):
             continue
         write_file(item['path'], dump_json(data), backup=item['raw'])
     if agent_status in ('installed', 'updated'):
-        modified = agent_status == 'updated' and not agent_managed(agent_sha)
+        modified = agent_status == 'updated' and (agent_link or not agent_managed(agent_sha))
+        if agent_link:
+            agent_path.unlink()
         write_file(agent_path, agent_new_raw, backup=agent_raw if modified else None)
     elif agent_status == 'removed':
         agent_path.unlink()
+        try:
+            agent_path.parent.rmdir()  # only when empty
+        except OSError:
+            pass
 
     # Manifest.
     entries, agent_record = {}, None
@@ -277,8 +339,15 @@ def run(args):
         agent_record = agent_new_sha
     elif agent_status == 'skipped (modified)':
         agent_record = recorded_agent
+    skill_hashes = {}
+    for name in args.skill if install else ():
+        skill_dir = Path(args.skills_dir) / name
+        if skill_dir.is_dir() and not skill_dir.is_symlink():
+            skill_hashes[name] = tree_hash(skill_dir)
     if entries or agent_record:
         state = {'version': 1, 'entries': entries}
+        if skill_hashes:
+            state['skills'] = skill_hashes
         if agent_record:
             state['agent_file_sha256'] = agent_record
         if manifest_raw is None or manifest != state:

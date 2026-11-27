@@ -45,8 +45,9 @@ class UpdateTest(unittest.TestCase):
         self.skills = self.tmp / 'skills'
 
     def run_update(self, action='install', *, tm=None, extra=(), env=None, path=None, full=True):
-        cmd = [sys.executable, str(SCRIPT), action, '--agent-dir', str(self.agent),
-               '--tubemaster', str(tm or self.tm)]
+        cmd = [sys.executable, str(SCRIPT), action, '--agent-dir', str(self.agent)]
+        if action != 'uninstall':
+            cmd += ['--tubemaster', str(tm or self.tm)]
         if full:
             cmd += ['--template', str(TEMPLATE), '--voice', str(self.voice),
                     '--skills-dir', str(self.skills)]
@@ -100,11 +101,78 @@ class UpdateTest(unittest.TestCase):
         r = self.run_update(env={'AGENT_YOUTUBE_EFFORT': 'turbo'})
         self.assert_rejected(r, 2, 'AGENT_YOUTUBE_EFFORT', before)
 
+    # --- B1: install-only options are rejected on uninstall ----------------
+    def test_uninstall_rejects_install_only_options(self):
+        self.install()
+        before = snapshot(self.tmp)
+        for extra in (['--force'], ['--tubemaster', str(self.tm)], ['--template', str(TEMPLATE)],
+                      ['--voice', str(self.voice)], ['--skills-dir', str(self.skills)]):
+            with self.subTest(extra=extra):
+                r = self.run_update('uninstall', full=False, extra=extra)
+                self.assert_rejected(r, 2, extra[0], before)
+
     def test_help_exits_0(self):
         r = subprocess.run([sys.executable, str(SCRIPT), '--help'], capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0)
         for word in ('--force', 'AGENT_YOUTUBE_MODEL', 'AGENT_YOUTUBE_OPERATOR'):
             self.assertIn(word, r.stdout)
+
+    # --- AD2: --check validates without writing ---------------------------
+    def test_check_validates_and_writes_nothing(self):
+        before = snapshot(self.tmp)
+        r = self.run_update(extra=['--check'])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, '')
+        self.assertEqual(snapshot(self.tmp), before)
+        self.assertEqual(sorted(p.name for p in self.agent.iterdir()), [])
+        (self.agent / 'mcp.json').symlink_to(self.tmp / 'dots' / 'mcp.json')
+        before = snapshot(self.tmp)
+        r = self.run_update(extra=['--check'])
+        self.assert_rejected(r, 1, 'dangling symlink', before)
+        (self.agent / 'mcp.json').unlink()
+        (self.agent / 'mcp.json').write_text('{\n // c\n}')
+        before = snapshot(self.tmp)
+        r = self.run_update(extra=['--check'])
+        self.assert_rejected(r, 1, 'comments and trailing commas', before)
+
+    # --- S1: frontmatter thinking == profile effort, model iff set ---------
+    def test_model_effort_matrix_keeps_files_in_step(self):
+        for model in (None, 'acme/m-1'):
+            for effort in (None, 'low', 'medium', 'max'):
+                with self.subTest(model=model, effort=effort):
+                    env = {}
+                    if model:
+                        env['AGENT_YOUTUBE_MODEL'] = model
+                    if effort:
+                        env['AGENT_YOUTUBE_EFFORT'] = effort
+                    self.install(env=env)
+                    profile = self.read('subagents.json')['model_profiles']['agent-youtube']
+                    lines = self.agent_text().split('---')[1].splitlines()
+                    self.assertIn(f'thinking: {profile["effort"]}', lines)
+                    self.assertEqual(profile['effort'], effort or 'high')
+                    model_lines = [l for l in lines if l.startswith('model:')]
+                    if model:
+                        self.assertEqual(model_lines, [f'model: {model}'])
+                        self.assertEqual(profile['model'], model)
+                    else:
+                        self.assertEqual(model_lines, [])
+                        self.assertNotIn('model', profile)
+
+    # --- AD3/S5: manifest-less unknown agent file --------------------------
+    def test_unknown_agent_file_without_manifest_is_a_conflict(self):
+        path = self.agent / 'agents' / 'agent-youtube.md'
+        path.parent.mkdir()
+        path.write_text('somebody else wrote this\n')
+        before = snapshot(self.tmp)
+        r = self.run_update()
+        self.assert_rejected(r, 1, 'agent-youtube.md', before)
+        self.assertIn('--force', r.stderr)
+
+    def test_conflict_message_names_the_entry_once(self):
+        (self.agent / 'mcp.json').write_text(json.dumps({'mcpServers': {'tubemaster': {'command': 'mine'}}}))
+        r = self.run_update()
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(r.stderr.count('mcpServers.tubemaster'), 1, r.stderr)
 
     # --- fresh install, rendering, manifest -------------------------------
     def test_fresh_install_writes_entries_agent_and_manifest(self):
@@ -288,6 +356,98 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('skipped (modified): ', r.stdout)
         self.assertEqual(path.read_text(), 'mine\n')
+
+    # --- AD4: empty agents/ is removed, a non-empty one is kept --------------
+    def test_uninstall_removes_agents_dir_only_when_empty(self):
+        self.install()
+        self.run_update('uninstall', full=False)
+        self.assertFalse((self.agent / 'agents').exists())
+        self.install()
+        (self.agent / 'agents' / 'other.md').write_text('other\n')
+        r = self.run_update('uninstall', full=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.agent / 'agents' / 'other.md').read_text(), 'other\n')
+
+    # --- AD5: a symlinked agent file is never written through or removed -----
+    def linked_agent(self):
+        target = self.tmp / 'dots' / 'agent-youtube.md'
+        target.parent.mkdir()
+        target.write_text('dotfiles copy\n')
+        (self.agent / 'agents').mkdir()
+        link = self.agent / 'agents' / 'agent-youtube.md'
+        link.symlink_to(target)
+        return link, target
+
+    def test_uninstall_skips_symlinked_agent_file(self):
+        self.install()
+        (self.agent / 'agents' / 'agent-youtube.md').unlink()
+        target = self.tmp / 'dots' / 'agent-youtube.md'
+        target.parent.mkdir()
+        target.write_text('dotfiles copy\n')
+        link = self.agent / 'agents' / 'agent-youtube.md'
+        link.symlink_to(target)
+        r = self.run_update('uninstall', full=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(f'skipped (symlink): {link}', r.stdout)
+        self.assertIn('skipped (symlink)', r.stderr)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(target.read_text(), 'dotfiles copy\n')
+
+    def test_install_over_symlinked_agent_file_needs_force_and_replaces_link(self):
+        link, target = self.linked_agent()
+        before = snapshot(self.tmp)
+        r = self.run_update()
+        self.assert_rejected(r, 1, 'symlink', before)
+        self.assertIn('--force', r.stderr)
+        self.assertTrue(link.is_symlink())
+        r = self.run_update(extra=['--force'])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(link.is_symlink())
+        self.assertIn('thinking: high', link.read_text())
+        self.assertEqual(target.read_text(), 'dotfiles copy\n')
+
+    # --- AD1: per-skill hashes in the manifest ---------------------------------
+    def make_skill(self, name='yt-a', text='one\n'):
+        d = self.skills / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'SKILL.md').write_text(text)
+        return d
+
+    def skill_state(self, name='yt-a', vendor=None):
+        cmd = [sys.executable, str(SCRIPT), 'skill-state', '--agent-dir', str(self.agent),
+               '--skill', name, '--path', str(self.skills / name)]
+        if vendor:
+            cmd += ['--vendor-copy', str(vendor)]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.strip()
+
+    def test_manifest_records_skill_hashes_and_judges_by_them(self):
+        skill = self.make_skill()
+        self.install(extra=['--skill', 'yt-a'])
+        self.assertIn('yt-a', self.read('agent-youtube.manifest.json')['skills'])
+        missing = self.tmp / 'no-vendor'
+        self.assertEqual(self.skill_state(vendor=missing), 'unmodified')
+        other = self.tmp / 'other-vendor'
+        other.mkdir()
+        (other / 'SKILL.md').write_text('different upstream\n')
+        self.assertEqual(self.skill_state(vendor=other), 'unmodified')
+        (skill / 'SKILL.md').write_text('edited\n')
+        self.assertEqual(self.skill_state(vendor=missing), 'modified')
+        self.assertEqual(self.skill_state('yt-none'), 'absent')
+
+    def test_skill_state_without_record_compares_with_vendor(self):
+        skill = self.make_skill()
+        self.assertEqual(self.skill_state(), 'vendor-missing')
+        vendor = self.tmp / 'vendor-skill'
+        vendor.mkdir()
+        (vendor / 'SKILL.md').write_text('one\n')
+        self.assertEqual(self.skill_state(vendor=vendor), 'unmodified')
+        (skill / 'SKILL.md').write_text('edited\n')
+        self.assertEqual(self.skill_state(vendor=vendor), 'modified')
+        shutil.rmtree(skill)
+        (self.skills / 'yt-a').symlink_to(vendor)
+        self.assertEqual(self.skill_state(vendor=vendor), 'symlink')
 
     # --- legacy (555cdd0) installs without a manifest ---------------------
     def legacy(self):

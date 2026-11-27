@@ -88,6 +88,14 @@ if (( ${#modified[@]} && ! force )); then
     exit 1
 fi
 
+# Validate configs and the agent file before anything is created or cloned.
+check_args=(--agent-dir "$agent_dir" --tubemaster "$vendor/tubemaster" --template "$repo/agents/agent-youtube.md"
+    --voice "$voice_dir/voice.md" --skills-dir "$pi_skills" --check)
+if (( force )); then
+    check_args+=(--force)
+fi
+python3 "$repo/config/update.py" install "${check_args[@]}"
+
 verify_pin() {
     git -C "$1" cat-file -e "$2^{commit}" 2>/dev/null
 }
@@ -131,12 +139,6 @@ fi
 mkdir -p -- "$pi_skills" "$claude_skills" "$voice_dir" "$agent_dir"
 voice="$(cd -- "$voice_dir" && pwd -P)/voice.md"
 pi_skills_abs=$(cd -- "$pi_skills" && pwd -P)
-update_args=(--agent-dir "$agent_dir" --tubemaster "$vendor/tubemaster"
-    --template "$repo/agents/agent-youtube.md" --voice "$voice" --skills-dir "$pi_skills_abs")
-if (( force )); then
-    update_args+=(--force)
-fi
-python3 "$repo/config/update.py" install "${update_args[@]}"
 
 for skill_root in "$pi_skills" "$claude_skills"; do
     for skill in "${skills[@]}"; do
@@ -159,6 +161,17 @@ done
 if [[ ! -e "$voice" && ! -L "$voice" ]]; then
     cp -- "$vendor/youtube-agent-skill/templates/voice.md" "$voice"
 fi
+
+# Registers the config entries and the agent file, and records a hash of each copied skill.
+update_args=(--agent-dir "$agent_dir" --tubemaster "$vendor/tubemaster"
+    --template "$repo/agents/agent-youtube.md" --voice "$voice" --skills-dir "$pi_skills_abs")
+for skill in "${skills[@]}"; do
+    update_args+=(--skill "$skill")
+done
+if (( force )); then
+    update_args+=(--force)
+fi
+python3 "$repo/config/update.py" install "${update_args[@]}"
 
 printf 'Installed %d skills in %s and %s.\n' "${#skills[@]}" "$pi_skills" "$claude_skills"
 printf 'Installed agent-youtube and registered TubeMaster MCP in %s.\n' "$agent_dir"

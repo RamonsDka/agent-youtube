@@ -136,7 +136,7 @@ Fill in `~/.claude/youtube/voice.md` with your audience, voice, and claims polic
 | `~/.gentle-shell/agent/agents/agent-youtube.md` | Renders the subagent definition with your resolved voice path and Pi skills directory. A modified file is kept unless you pass `--force`. |
 | `~/.gentle-shell/agent/mcp.json` | Adds the `tubemaster` stdio entry, which runs `npm run mcp:video-metadata` from the TubeMaster checkout. The `npm` command is registered by absolute path, so GUI sessions without your shell's `PATH` still find it. |
 | `~/.gentle-shell/agent/subagents.json` | Adds the `agent-youtube` profile: the model from `AGENT_YOUTUBE_MODEL` (omitted by default, so your configured default applies) and the effort (`high` by default). |
-| `~/.gentle-shell/agent/agent-youtube.manifest.json` | Records exactly what was installed, so upgrades and uninstalls know what is still unmodified. |
+| `~/.gentle-shell/agent/agent-youtube.manifest.json` | Records exactly what was installed, including a hash of each copied skill, so upgrades and uninstalls know what is still unmodified. |
 
 ### Options and environment
 
@@ -159,7 +159,7 @@ The default install gives the agent only read-only TubeMaster tools, so drafting
 
 ### Upgrades and local edits
 
-Reinstall upgrades entries that still match the manifest, leaves unchanged ones alone, and stops with guidance if you modified an entry, a skill, or the agent file. The check happens before the vendor checkout moves to a new pin, so an upstream bump alone never counts as your edit. Rerun with `--force` to overwrite; the originals are kept as `<name>.bak.<timestamp>` (config files get `<name>.json.bak.<UTC timestamp>` beside the configured path, and the file's mode is preserved).
+Install validates the configs before it creates or clones anything, so a rejected install changes nothing. A symlinked agent file is never written through: `--force` replaces the link itself. Reinstall upgrades entries that still match the manifest, leaves unchanged ones alone, and stops with guidance if you modified an entry, a skill, or the agent file. The check happens before the vendor checkout moves to a new pin, so an upstream bump alone never counts as your edit. Rerun with `--force` to overwrite; the originals are kept as `<name>.bak.<timestamp>` (config files get `<name>.json.bak.<UTC timestamp>` beside the configured path, and the file's mode is preserved).
 
 Config files must be plain JSON. Comments and trailing commas are not supported; the installer stops with a clear error and changes nothing.
 
@@ -236,7 +236,7 @@ cd ~/p/agent-youtube
 bash uninstall.sh
 ```
 
-Uninstall removes the JSON entries recorded in the manifest and backs up the configs it changes. It removes a skill only if it is a real directory identical to the vendor copy, and the agent file only if it still matches what was installed. Modified or symlinked skills, a modified agent file, and skills whose vendor checkout is missing are kept. Each item is reported on stdout as `removed`, `unchanged`, or `skipped (modified)`, and every skipped path is listed on stderr with its reason. When anything was kept, the final message says "some items were kept" (the exit code is still 0). Uninstall also keeps the voice profile, Git checkouts, backups, and unrelated entries. Use the same path overrides as the install, if any.
+Uninstall removes the JSON entries recorded in the manifest and backs up the configs it changes. It removes a skill only if it is a real directory identical to the hash the installer recorded in the manifest (the vendor copy is used only when no hash was recorded, so a missing or moved `vendor/` does not block it), and the agent file only if it still matches what was installed; it then removes `agents/` only if that is left empty. Modified or symlinked skills, a symlinked or modified agent file are kept. Each item is reported on stdout as `removed`, `unchanged`, `skipped (modified)`, or `skipped (symlink)`, and every skipped path is listed on stderr with its reason. When anything was kept, the final message says "some items were kept" (the exit code is still 0). Uninstall also keeps the voice profile, Git checkouts, backups, and unrelated entries. Use the same path overrides as the install, if any.
 
 ## Credits
 

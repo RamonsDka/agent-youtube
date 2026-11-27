@@ -18,18 +18,9 @@ show_paths() {
 }
 
 # skill_state INSTALLED VENDOR_COPY: absent | symlink | vendor-missing | unmodified | modified.
-# "Unmodified" means identical to the copy in the vendor checkout.
+# "Unmodified" means identical to the hash recorded in the manifest at install time, or,
+# when none was recorded, to the copy in the vendor checkout.
 skill_state() {
-    local target=$1 source_skill=$2
-    if [[ -L $target ]]; then
-        echo symlink
-    elif [[ ! -e $target ]]; then
-        echo absent
-    elif [[ ! -d $source_skill ]]; then
-        echo vendor-missing
-    elif diff -qr -- "$source_skill" "$target" >/dev/null 2>&1; then
-        echo unmodified
-    else
-        echo modified
-    fi
+    python3 "$repo/config/update.py" skill-state --agent-dir "$agent_dir" \
+        --skill "$(basename -- "$1")" --path "$1" --vendor-copy "$2"
 }
