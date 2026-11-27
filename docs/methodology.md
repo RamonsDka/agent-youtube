@@ -1,17 +1,34 @@
-# How Agent-Youtube was built and verified
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/agent-youtube-logo-white.svg">
+    <img src="brand/agent-youtube-logo.svg" width="192" alt="Agent-Youtube logo">
+  </picture>
+</p>
+
+<h1 align="center">How Agent-Youtube was built and verified</h1>
 
 The installer test checked the filesystem and config changes in a temporary home. A separate real-home check verified tool discovery and ran a drafting demo. Neither check verified Google OAuth or changed a channel.
 
-## One spec, four tasks
+<p align="center">
+  <a href="#spec-and-tasks">Spec and tasks</a> ·
+  <a href="#installer-integration-test">Installer test</a> ·
+  <a href="#real-installation-and-demo">Real installation and demo</a> ·
+  <a href="#design-decisions">Design decisions</a> ·
+  <a href="#limits">Limits</a> ·
+  <a href="#screenshot-sources">Screenshot sources</a>
+</p>
 
-The [ODD task file](../odd/tasks/agent-youtube.md) defines the specs and splits the work into four units:
+## Spec and tasks
+
+The [ODD task file](../odd/tasks/agent-youtube.md) defines the specs and splits the work into five units:
 
 | Task | Work |
 | --- | --- |
 | T1 | Build the installer, uninstaller, subagent definition, and tests in the `~/p/agent-youtube` checkout (S1–S5, S7). |
 | T2 | Install globally and check skills, agent discovery, and MCP registration (S1–S3). |
 | T3 | Document setup, methodology, and captured output for the public repo (S6). |
-| T4 | Create the public GitHub repo and push it (S6, separate from this docs change). |
+| T4 | Create the public GitHub repo and push it (S6). |
+| T5 | Add the README cover, branding, badges, and navigation (S8). |
 
 The ODD test-first sequence is RED (observe a behavior test failing before the implementation) and GREEN (observe it passing after the fix). The integration test sets out the expected install, reinstall, and uninstall behavior as assertions. The captured run below is a passing rerun for the docs; the evidence does not include the original RED transcript.
 
@@ -46,7 +63,7 @@ The recorded real-home verification was separate from the integration test:
 
 ## Limits
 
-Google OAuth was not configured during verification. Follow the [manual setup](../README.md#connect-tubemaster-for-authenticated-operations) to use authenticated tools. Fill `~/.claude/youtube/voice.md` before asking for drafts in your voice; the demo ran with the template still unfilled. `hookscore.py` applies writing heuristics and cannot predict retention. `title.py` lints the supplied copy; it does not measure click-through rate.
+Google OAuth was not configured during verification. Follow the [manual setup](../README.md#tubemaster-oauth) to use authenticated tools. Fill `~/.claude/youtube/voice.md` before asking for drafts in your voice; the demo ran with the template still unfilled. `hookscore.py` applies writing heuristics and cannot predict retention. `title.py` lints the supplied copy; it does not measure click-through rate.
 
 ## Screenshot sources
 
@@ -64,4 +81,10 @@ If Flatpak Chrome cannot see the checkout, grant access to `docs/assets/` for th
 flatpak run --filesystem="$PWD/docs/assets" com.google.Chrome \
   --headless --disable-gpu --screenshot="$PWD/docs/assets/$name.png" \
   --window-size=1200,800 "file://$PWD/docs/assets/src/$name.htm"
+```
+
+The README cover is an illustration of the recorded drafting demo. To render it at 1600 × 800 from [`assets/src/cover.htm`](assets/src/cover.htm), run from the checkout:
+
+```bash
+flatpak run --filesystem="$PWD/docs/assets" com.google.Chrome --headless --disable-gpu --user-data-dir=/tmp/ay-chrome-cover --screenshot="$PWD/docs/assets/cover.png" --window-size=1600,800 "file://$PWD/docs/assets/src/cover.htm"
 ```

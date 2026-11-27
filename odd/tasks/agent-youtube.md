@@ -11,6 +11,7 @@ Repo: ~/p/agent-youtube (public GitHub repo RamonsDka/agent-youtube). Global ins
 - S4: "y si entiendes que mas cosas pues dale" — reuse already-installed `watch-video` (video-watcher skill) and `yt-dlp` for transcripts/public listings; nothing new heavy.
 - S5: "crea uba carpeta en ~/p/agent-youtube y trabaja desde aqui y aqui hacemos todo, el git, todo"
 - S6: "despues creamos un repo de github con imagenes capturas, metodologia, todo." — public repo with README, docs/methodology.md, screenshots in docs/assets/.
+- S8: "me gustaria que tuviera portada, indice, ect.. revisa mis ultimos repo de gh y sabras a que me refiero como me gustan los post de gh" — reference style (RamonsDka/soundcraft, filmcraft, artcraft READMEs): centered logo, centered H1, bold one-line tagline, centered subtitle paragraph, flat-square shields.io badge row, centered link row separated by ·, full-width hero image with <sub> caption, GitHub `> [!NOTE]` callout, centered anchor navigation index, then sections; feature tables with image previews.
 - S7: Agent never publishes or mutates a channel without explicit user confirmation (inherits both upstream guarantees).
 
 ## Tasks
@@ -18,9 +19,11 @@ Repo: ~/p/agent-youtube (public GitHub repo RamonsDka/agent-youtube). Global ins
 - T1 [S1,S2,S3,S4,S5,S7] repo scaffold: install.sh (idempotent, backups), agents/agent-youtube.md, tests — writer — commit: 29ccc15
 - T2 [S1,S2,S3] run install.sh, verify global install — parent — commit: n/a
 - T3 [S6] README, methodology, screenshots — writer — commit: a2672f0
-- T4 [S6] gh repo create public + push — parent
+- T4 [S6] gh repo create public + push — parent — done
+- T5 [S8] README cover, index, badges, hero image, logo — writer — commit:
 
 ## Log
 
 - L1: nesecito que instale esto de manera global https://github.com/jakeschincariol/youtube-agent-skill pero tambien creo que seria recomendable y optimo si creamos un agente directamente con todas estas capacidades, se llamaria Agent-Youtube / le precargariamos esto / - https://github.com/jakeschincariol/youtube-agent-skill / - algo como esto tambien: https://github.com/Gentleman-Programming/tubemaster / y si entiendes que mas cosas pues dale / crea uba carpeta en  ~/p/agent-youtube y trabaja desde aqui y aqui hacemos todo, el git, todo, despues creamos un repo de github con imagenes capturas, metodologia, todo.
+- L3: ok el repo esta bien, pero me gustaria que tuviera portada, indice, ect.. revisa mis ultimos repo de gh y sabras a que me refiero como me gustan los post de gh
 - L2: User decisions: repo public; TubeMaster cloned + MCP registered, user supplies OAuth; agent model deepseek-v4.1-flash.

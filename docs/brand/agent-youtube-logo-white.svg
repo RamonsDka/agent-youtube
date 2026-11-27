@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="288" height="48" viewBox="0 0 288 48">
+  <rect x="2" y="8" width="46" height="32" rx="10" fill="#FF0033"/>
+  <path d="M17 16v16l13-8z" fill="#fff"/>
+  <path d="M43 2c0 6-4 10-10 10 6 0 10 4 10 10 0-6 4-10 10-10-6 0-10-4-10-10Z" fill="#fff" stroke="#18181b" stroke-width="2"/>
+  <text x="64" y="34" fill="#fff" font-family="system-ui, sans-serif" font-size="29" font-weight="750">Agent-Youtube</text>
+</svg>
